@@ -5,6 +5,7 @@ parametry:
 -f lokalizacja_pliku , lokalizacja pliku z danymi wejœciowymi.
 -r liczba_iteracji , wypisanie rozwi¹zañ u¿ywaj¹c losowego wyboru œcie¿ki eulera, liczba iteracji okreœla ile bêdzie prób przejœcia œcie¿ki.
 -a , wypisanie wszystkich rozwi¹zañ.
+-t wielkoœæ_pods³owa , tryb testowego wejœcia, w pliku -f musi byæ podana wy³¹cznie sekwencja wynikowa, program sam sobie na podstawie tego generuje plik wejœciowy i zapisuje go pod nazw¹ testInput.txt, algorytm jest uruchamiany na wygenerowanych danych.
 
 Brak parametru -r oraz -a oznacza wypisanie jednego rozwi¹zania.
 

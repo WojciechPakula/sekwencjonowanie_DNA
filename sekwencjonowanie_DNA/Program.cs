@@ -14,8 +14,10 @@ namespace sekwencjonowanie_DNA
         {
             //PARAMETRY
             int mode = 0;
+            int k = 3;
             int iterations = 1;
             string path = "";
+            bool testMode = false;
             for (int i = 0; i < args.Count(); ++i)
             {
                 switch (args[i])
@@ -32,6 +34,11 @@ namespace sekwencjonowanie_DNA
                     case "-a"://random
                         mode = 2;
                         break;
+                    case "-t"://test mode, podawany jest wynik, z wyniku tworzony jest input i z tego znowu wynik.
+                        i++;
+                        testMode = true;
+                        try { if (i < args.Count()) k = int.Parse(args[i]); } catch { }
+                        break;
                 }
             }
             //PROGRAM
@@ -40,6 +47,19 @@ namespace sekwencjonowanie_DNA
                 List<string> input = loadFile(path);
                 try
                 {
+                    if (testMode)
+                    {
+                        string result = input[0];
+                        var l = new List<string>();
+                        if (result.Length <= k || k <= 0) throw new Exception("Tryb testowy, długość słowa:" + result.Length+" , parametr k:"+k+" , k musi być mniejsze niż słowo.");
+                        for (int i = 0; i < result.Length-k+1; ++i)
+                        {
+                            string sub = result.Substring(i, k);
+                            l.Add(sub);
+                        }
+                        input = shuffle(l);
+                        saveToFile(input, "testInput.txt");
+                    }
                     List<string> output = new List<string>();
                     switch (mode)
                     {
@@ -83,6 +103,28 @@ namespace sekwencjonowanie_DNA
                 l = s.ToList();
             }
             return l;
+        }
+
+        static List<string> shuffle(List<string> alpha)
+        {
+            Random rnd = new Random();
+            for (int i = 0; i < alpha.Count-1; i++)
+            {
+                string temp = alpha[i];
+                int randomIndex = rnd.Next(i, alpha.Count);
+                alpha[i] = alpha[randomIndex];
+                alpha[randomIndex] = temp;
+            }
+            return alpha;
+        }
+
+        static void saveToFile(List<string> list, string name)
+        {
+            using (TextWriter tw = new StreamWriter(name))
+            {
+                foreach (string s in list)
+                    tw.WriteLine(s);
+            }
         }
     }
 }
