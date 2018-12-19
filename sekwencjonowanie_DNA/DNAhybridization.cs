@@ -16,10 +16,11 @@ namespace sekwencjonowanie_DNA
         public static string getChain(List<string> input, Boolean randomMode = false)
         {
             randomPath = randomMode;
-            var inputTable = validator(input);
+            List<string> dup = new List<string>();  //zawiera duplikaty
+            var inputTable = validator(input, out dup);
             var splitTable = split(inputTable);
             string letters = getLetters(splitTable);
-            graph = new Graph(letters, splitTable, inputTable);
+            graph = new Graph(letters, splitTable, inputTable, dup);
             var path = graph.getEulerPath();
             string output = pathToString(path);
             return output;
@@ -99,15 +100,18 @@ namespace sekwencjonowanie_DNA
         }
 
         //usuwa powtórzenia oraz zamienia małe litery na duże
-        private static HashSet<string> validator(List<string> input)
+        private static HashSet<string> validator(List<string> input, out List<string> dup)
         {
             HashSet<string> hs = new HashSet<string>();
+            dup = new List<string>();
             int k = 0;
             foreach (string element in input)
             {
                 if (k==0) k = element.Length;
+                if (element.Length == 0) continue;
                 if (k != element.Length) throw new Exception("Wszystkie słowa muszą mieć identyczną długość "+k+"!="+ element.Length + ", możliwe że gdzieś jest spacja.");
                 string uppercase = element.ToUpper();
+                if (hs.Contains(uppercase)) dup.Add(uppercase);
                 hs.Add(uppercase);
             }
             return hs;
@@ -127,20 +131,32 @@ namespace sekwencjonowanie_DNA
             }
             return hs;
         }
+
         private class Node
         {
             public Graph g;
             public string key = "";
-            Dictionary<char, Node> edges = new Dictionary<char, Node>();
-            Dictionary<char, Node> virtualEdges = null;
+            List<CharNode> edgesList = new List<CharNode>();
+            List<CharNode> virtualEdgesList = null;
             public int inCount; //liczba krawędzi przychodzących
             public int outCount;    //liczba krawędzi wychodzących
+
+            private struct CharNode
+            {
+                public char key;
+                public Node value;
+                public CharNode(char c, Node n)
+                {
+                    key = c;
+                    value = n;
+                }
+            }
 
             //dodaje krawędź/ścieżke
             public void addEdge(char keyChar, Node newNode)
             {
-                if (edges == null) return;
-                edges[keyChar] = newNode;
+                if (edgesList == null) return;
+                edgesList.Add(new CharNode(keyChar, newNode));
                 outCount++;
                 newNode.inCount++;
             }
@@ -148,10 +164,11 @@ namespace sekwencjonowanie_DNA
             //potrzebne do niszczenia za sobą ścieżek przy przechodzeniu przez graf
             public void buildVirtualEdges()
             {
-                virtualEdges = new Dictionary<char, Node>();
-                foreach (var p in edges)
+                virtualEdgesList = new List<CharNode>();
+                foreach (var p in edgesList)
                 {
-                    virtualEdges[p.Key] = p.Value;
+                    var tmp = new CharNode(p.key, p.value);
+                    virtualEdgesList.Add(tmp);
                 }
             }
 
@@ -160,22 +177,22 @@ namespace sekwencjonowanie_DNA
             {
                 for (;;)
                 {
-                    if (virtualEdges.Count > 0)
+                    if (virtualEdgesList.Count > 0)
                     {
-                        var pair = virtualEdges.First();//wywala wyjatek gdy węzeł jest liściem
+                        var pair = virtualEdgesList.First();//wywala wyjatek gdy węzeł jest liściem
                         int choice = 0;
                         if (randomPath) { 
                             // TRYB LOSOWEGO WYBORU SCIEZKI
-                            choice = rnd.Next(virtualEdges.Count()); 
+                            choice = rnd.Next(virtualEdgesList.Count()); 
                         }
                         else
                         {
                             //TRYB STRATEGICZNEGO WYBORU SCIEZKI
-                            if (virtualEdges.Count > 1 && g.lastChoice != null)
+                            if (virtualEdgesList.Count > 1 && g.lastChoice != null)
                             {
                                 int ind = g.localChoices;
                                 choice = g.lastChoice[ind];
-                                if (choice == -1) choice = virtualEdges.Count - 1;
+                                if (choice == -1) choice = virtualEdgesList.Count - 1;
                                 bool change = g.changeLock;
                                 for (int i = ind + 1; i < g.totalChoices; ++i) if (g.lastChoice[i] != -1) { change = false; break; }
                                 if (change)
@@ -183,21 +200,21 @@ namespace sekwencjonowanie_DNA
                                     choice++;
                                     g.changeLock = false;
                                     g.lastChoice[ind] = choice;
-                                    if (choice >= virtualEdges.Count - 1)
+                                    if (choice >= virtualEdgesList.Count - 1)
                                     {
-                                        choice = virtualEdges.Count - 1;//chyba niepotrzebne
+                                        choice = virtualEdgesList.Count - 1;//chyba niepotrzebne
                                         g.lastChoice[ind] = -1;
                                     }
                                     for (int i = ind + 1; i < g.totalChoices; ++i) g.lastChoice[i] = 0;
                                 }
                             }
-                            if (virtualEdges.Count > 1 && g.lastChoice == null) g.totalChoices++;
-                            if (virtualEdges.Count > 1) g.localChoices++;
+                            if (virtualEdgesList.Count > 1 && g.lastChoice == null) g.totalChoices++;
+                            if (virtualEdgesList.Count > 1) g.localChoices++;
                         }
                         
-                        pair = virtualEdges.ElementAt(choice);
-                        virtualEdges.Remove(pair.Key);
-                        tmp = pair.Value.solvePath(tmp);
+                        pair = virtualEdgesList.ElementAt(choice);
+                        virtualEdgesList.Remove(pair);
+                        tmp = pair.value.solvePath(tmp);
                     } else
                     {
                         //nie ma więcej krawędzi
@@ -218,7 +235,7 @@ namespace sekwencjonowanie_DNA
 
             List<Node> nodes = new List<Node>();
             string letters = "";    //zawiera litery "ACGT"
-            public Graph(string letters, HashSet<string> stringNodes, HashSet<string> input)
+            public Graph(string letters, HashSet<string> stringNodes, HashSet<string> input, List<string> dup)
             {
                 this.letters = letters;
                 foreach (var n in stringNodes)
@@ -228,11 +245,11 @@ namespace sekwencjonowanie_DNA
                     n2.g = this;
                     nodes.Add(n2);
                 }
-                buildEdges(input);
+                buildEdges(input, dup);
             }
 
             //uzupełnia węzłom ścieżki
-            void buildEdges(HashSet<string> input)
+            void buildEdges(HashSet<string> input, List<string> dup)
             {
                 foreach (var n in nodes)
                 {
@@ -253,6 +270,23 @@ namespace sekwencjonowanie_DNA
                                 }
                             }
                         }
+                    }
+                }
+                //obsługa duplikatów
+                foreach (var d in dup)
+                {
+                    string start = d.Substring(0, d.Length - 1);
+                    string end = d.Substring(1);
+                    char c = d[d.Length - 1];
+                    Node n1 = null;
+                    Node n2 = null;
+                    foreach (var n in nodes)
+                    {
+                        if (n.key == start) n1 = n;
+                        if (n.key == end) n2 = n;
+                    }
+                    if (n1 != null && n2 != null) {
+                        n1.addEdge(c, n2);
                     }
                 }
                 //zrobić sprawdzanie błędów negatywnych, sprawdzanie rekurencyjne i przewidywanie nowych ścieżek
