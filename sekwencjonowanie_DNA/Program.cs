@@ -13,7 +13,8 @@ namespace sekwencjonowanie_DNA
         static void Main(string[] args)
         {
             //PARAMETRY
-            bool randomMode = false;
+            int mode = 0;
+            int iterations = 1;
             string path = "";
             for (int i = 0; i < args.Count(); ++i)
             {
@@ -24,7 +25,12 @@ namespace sekwencjonowanie_DNA
                         if (i < args.Count()) path = args[i];
                         break;
                     case "-r"://random
-                        randomMode = true;
+                        i++;
+                        mode = 1;
+                        try{if (i < args.Count()) iterations = int.Parse(args[i]);} catch{}
+                        break;
+                    case "-a"://random
+                        mode = 2;
                         break;
                 }
             }
@@ -34,19 +40,22 @@ namespace sekwencjonowanie_DNA
                 List<string> input = loadFile(path);
                 try
                 {
-                    HashSet<string> hs = new HashSet<string>();
-                    for (int i = 0; i < 200; ++i)
+                    List<string> output = new List<string>();
+                    switch (mode)
                     {
-                        string output = "";
-                        if (i == 0)
-                            output = DNAhybridization.getChain(input, randomMode);
-                        else
-                            output = DNAhybridization.getChainAgain();
-                        hs.Add(output);
-                        Console.WriteLine(output);
+                        case 0://single
+                            output.Add(DNAhybridization.getChain(input));
+                            break;
+                        case 1://random
+                            output = DNAhybridization.getRandomChains(input, iterations);
+                            break;
+                        case 2://all results
+                            output = DNAhybridization.getChains(input);
+                            break;
                     }
-                    Console.WriteLine("\nUzyskane wyniki " +hs.Count+":");
-                    foreach (var e in hs)
+                       
+                    Console.WriteLine("\nUzyskane wyniki " + output.Count + ":");
+                    foreach (var e in output)
                     {
                         Console.WriteLine(e);
                     }
@@ -54,7 +63,6 @@ namespace sekwencjonowanie_DNA
                 {
                     Console.WriteLine(ex.Message);
                 }
-                
             } catch
             {
                 Console.WriteLine("Brak pliku wejściowego");

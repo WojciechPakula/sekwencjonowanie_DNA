@@ -26,12 +26,45 @@ namespace sekwencjonowanie_DNA
         }
 
         //To jest optymalizacja, która wykorzystuje już raz zbudowany graf, liczy wtedy na nim ścieżkę od nowa, ta opcja ma sens w trybie losowym.
-        public static string getChainAgain()
+        static string getChainAgain()
         {
             if (graph == null) throw new Exception("Błąd, nigdy nie wywołano getChain();");
             var path = graph.getEulerPath();
             string output = pathToString(path);
             return output;
+        }
+
+        //Zwraca wszystkie rozwiązania
+        public static List<string> getChains(List<string> input)
+        {
+            HashSet<string> hs = new HashSet<string>();
+            for (int i = 0; ; ++i)
+            {
+                string output = "";
+                if (i == 0)
+                    output = getChain(input);
+                else
+                    output = getChainAgain();
+                hs.Add(output);
+                if (graph.noMoreSolutions) break;
+            }
+            return hs.ToList();
+        }
+
+        //Zwraca wszystkie rozwiązania
+        public static List<string> getRandomChains(List<string> input, int iterations)
+        {
+            HashSet<string> hs = new HashSet<string>();
+            for (int i = 0; i < iterations; ++i)
+            {
+                string output = "";
+                if (i == 0)
+                    output = getChain(input, true);
+                else
+                    output = getChainAgain();
+                hs.Add(output);
+            }
+            return hs.ToList();
         }
 
         //zamienia listę węzłów na tekst wynikowy
@@ -73,7 +106,7 @@ namespace sekwencjonowanie_DNA
             foreach (string element in input)
             {
                 if (k==0) k = element.Length;
-                if (k != element.Length) throw new Exception("Wszystkie słowa muszą mieć identyczną długość "+k+"!="+ element.Length);
+                if (k != element.Length) throw new Exception("Wszystkie słowa muszą mieć identyczną długość "+k+"!="+ element.Length + ", możliwe że gdzieś jest spacja.");
                 string uppercase = element.ToUpper();
                 hs.Add(uppercase);
             }
@@ -94,9 +127,9 @@ namespace sekwencjonowanie_DNA
             }
             return hs;
         }
-
         private class Node
         {
+            public Graph g;
             public string key = "";
             Dictionary<char, Node> edges = new Dictionary<char, Node>();
             Dictionary<char, Node> virtualEdges = null;
@@ -130,11 +163,39 @@ namespace sekwencjonowanie_DNA
                     if (virtualEdges.Count > 0)
                     {
                         var pair = virtualEdges.First();//wywala wyjatek gdy węzeł jest liściem
-                        if (randomPath)
-                        {
-                            int r = rnd.Next(virtualEdges.Count());
-                            pair = virtualEdges.ElementAt(r);
+                        int choice = 0;
+                        if (randomPath) { 
+                            // TRYB LOSOWEGO WYBORU SCIEZKI
+                            choice = rnd.Next(virtualEdges.Count()); 
                         }
+                        else
+                        {
+                            //TRYB STRATEGICZNEGO WYBORU SCIEZKI
+                            if (virtualEdges.Count > 1 && g.lastChoice != null)
+                            {
+                                int ind = g.localChoices;
+                                choice = g.lastChoice[ind];
+                                if (choice == -1) choice = virtualEdges.Count - 1;
+                                bool change = g.changeLock;
+                                for (int i = ind + 1; i < g.totalChoices; ++i) if (g.lastChoice[i] != -1) { change = false; break; }
+                                if (change)
+                                {
+                                    choice++;
+                                    g.changeLock = false;
+                                    g.lastChoice[ind] = choice;
+                                    if (choice >= virtualEdges.Count - 1)
+                                    {
+                                        choice = virtualEdges.Count - 1;//chyba niepotrzebne
+                                        g.lastChoice[ind] = -1;
+                                    }
+                                    for (int i = ind + 1; i < g.totalChoices; ++i) g.lastChoice[i] = 0;
+                                }
+                            }
+                            if (virtualEdges.Count > 1 && g.lastChoice == null) g.totalChoices++;
+                            if (virtualEdges.Count > 1) g.localChoices++;
+                        }
+                        
+                        pair = virtualEdges.ElementAt(choice);
                         virtualEdges.Remove(pair.Key);
                         tmp = pair.Value.solvePath(tmp);
                     } else
@@ -149,6 +210,12 @@ namespace sekwencjonowanie_DNA
         }
         private class Graph
         {
+            public List<int> lastChoice = null;
+            public int totalChoices = 0;
+            public int localChoices = 0;
+            public bool changeLock;
+            public bool noMoreSolutions = false;
+
             List<Node> nodes = new List<Node>();
             string letters = "";    //zawiera litery "ACGT"
             public Graph(string letters, HashSet<string> stringNodes, HashSet<string> input)
@@ -158,6 +225,7 @@ namespace sekwencjonowanie_DNA
                 {
                     Node n2 = new Node();
                     n2.key = n;
+                    n2.g = this;
                     nodes.Add(n2);
                 }
                 buildEdges(input);
@@ -195,6 +263,8 @@ namespace sekwencjonowanie_DNA
 
             public List<string> getEulerPath()
             {
+                changeLock = true;
+                localChoices = 0;
                 int maxCount = 0;   //ilosc węzłów które mają więcej wyjśc niż wejść
                 int minCount = 0;   //ilość węzłów które mają więcej wejść niż wyjść
                 Node start = null;
@@ -218,24 +288,41 @@ namespace sekwencjonowanie_DNA
                     //graf półeulerowski
                     var output = start.solvePath();
                     output.Reverse();
+                    updateFlags();
                     return output;
                 } else if (maxCount == 0 && minCount == 0)
                 {
                     //graf eulerowski
                     start = nodes.First();
-                    /*if (randomPath)
-                    {
-                        int r = rnd.Next(nodes.Count());
-                        start = nodes.ElementAt(r);
-                    }*/
                     var output = start.solvePath();
                     output.Reverse();
+                    updateFlags();
                     return output;
                 } else
                 {
                     //zabezpieczenie przed dziwnymi grafami
                     //nie ma jeszcze sprawdzania spójności grafu !!!!!!!!!!!!!!!
                     return null;
+                }
+            }
+            void updateFlags()
+            {
+                if (lastChoice != null)
+                {
+                    bool endProgram = true;
+                    foreach (var element in lastChoice)
+                    {
+                        if (element != -1) { endProgram = false; break; }
+                    }
+                    noMoreSolutions = endProgram;
+                }
+                if (lastChoice == null)
+                {
+                    lastChoice = new List<int>();
+                    for (int i = 0; i < totalChoices; ++i)
+                    {
+                        lastChoice.Add(0);
+                    }
                 }
             }
         }
