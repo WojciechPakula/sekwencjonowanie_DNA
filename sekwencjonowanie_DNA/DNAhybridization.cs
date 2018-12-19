@@ -137,11 +137,21 @@ namespace sekwencjonowanie_DNA
             public Graph g;
             public string key = "";
             List<CharNode> edgesList = new List<CharNode>();
-            List<CharNode> virtualEdgesList = null;
+            public List<CharNode> virtualEdgesList = null;
             public int inCount; //liczba krawędzi przychodzących
             public int outCount;    //liczba krawędzi wychodzących
 
-            private struct CharNode
+            public int getVirtualEdgesCount()
+            {
+                return virtualEdgesList.Count;
+            }
+
+            public string getKey()
+            {
+                return key;
+            }
+
+            public struct CharNode
             {
                 public char key;
                 public Node value;
@@ -289,10 +299,178 @@ namespace sekwencjonowanie_DNA
                         n1.addEdge(c, n2);
                     }
                 }
+                //sprawdzenie spójności grafu
+                bool connect = connectivityCheck();
+                //naprawa spójności pierwszego stopnia
+                if (!connect)
+                {
+                    Console.WriteLine("Graf jest prawdopodobnie niespójny.");
+                    Console.WriteLine("Próba odtworzenia brakującego połączenia grafu.");
+                    //szukaj lisci
+                    List<Node> leafs = new List<Node>();
+                    foreach (var n in nodes) if (n.outCount == 0) leafs.Add(n);
+                    //if (leafs.Count == 0) foreach (var n in nodes) if (n.outCount == 1) leafs.Add(n);
+
+                    foreach (var l in leafs)
+                    {
+                        foreach (char c0 in letters)
+                        {
+                            string f = l.key.Substring(1) + c0;
+                            //for (int j = 0; j < nodes.Count; ++j)
+                            Node ne = null;
+                            foreach (var n2 in nodes)
+                            {
+                                if (n2.key == f) ne = n2;
+                            }
+                            if (ne != null)
+                            {
+                                //dodanie krawedzi
+                                l.addEdge(c0, ne);
+                                break;
+                            }
+                        }
+                    }
+                }
+                else return;
+                connect = connectivityCheck();
+                //naprawa spójności drugiego stopnia
+                if (!connect)
+                {
+                    Console.WriteLine("Próba odtworzenia brakującego węzła grafu.");
+                    //szukaj lisci
+                    List<Node> leafs = new List<Node>();
+                    foreach (var n in nodes) if (n.outCount == 0) leafs.Add(n);
+                    //if (leafs.Count == 0) foreach (var n in nodes) if (n.outCount == 1) leafs.Add(n);
+
+                    foreach (var l in leafs)
+                    {
+                        foreach (char c0 in letters)
+                        {
+                            foreach (char c1 in letters)
+                            {
+                                string f0 = l.key.Substring(1) + c0;
+                                string f1 = l.key.Substring(2) + c0 + c1;
+                                //for (int j = 0; j < nodes.Count; ++j)
+                                Node ne = null;
+                                foreach (var n2 in nodes)
+                                {
+                                    if (n2.key == f1) ne = n2;
+                                }
+                                if (ne != null)
+                                {
+                                    //dodanie krawedzi
+                                    Node n3 = new Node();
+                                    n3.key = f0;
+                                    n3.g = this;
+                                    nodes.Add(n3);
+                                    n3.addEdge(c1, ne);
+                                    l.addEdge(c0, n3);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                else return;
+                connect = connectivityCheck();
+                //naprawa spójności trzeciego stopnia
+                if (!connect)
+                {
+                    Console.WriteLine("Próba odtworzenia dwóch brakujących węzłów grafu.");
+                    //szukaj lisci
+                    List<Node> leafs = new List<Node>();
+                    foreach (var n in nodes) if (n.outCount == 0) leafs.Add(n);
+                    //if (leafs.Count == 0) foreach (var n in nodes) if (n.outCount == 1) leafs.Add(n);
+
+                    foreach (var l in leafs)
+                    {
+                        foreach (char c0 in letters)
+                        {
+                            foreach (char c1 in letters)
+                            {
+                                foreach (char c2 in letters)
+                                {
+                                    string f0 = l.key.Substring(1) + c0;
+                                    string f1 = l.key.Substring(2) + c0 + c1;
+                                    string f2 = l.key.Substring(3) + c0 + c1 + c2;
+                                    //for (int j = 0; j < nodes.Count; ++j)
+                                    Node ne = null;
+                                    foreach (var n2 in nodes)
+                                    {
+                                        if (n2.key == f2) ne = n2;
+                                    }
+                                    if (ne != null)
+                                    {
+                                        //dodanie krawedzi
+                                        Node n3 = new Node();
+                                        n3.key = f0;
+                                        n3.g = this;
+                                        nodes.Add(n3);
+                                        Node n4 = new Node();
+                                        n4.key = f1;
+                                        n4.g = this;
+                                        nodes.Add(n4);
+                                        l.addEdge(c0, n3);
+                                        n3.addEdge(c1, n4);
+                                        n4.addEdge(c2, ne);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else return;
                 //zrobić sprawdzanie błędów negatywnych, sprawdzanie rekurencyjne i przewidywanie nowych ścieżek
                 //zrobić sprawdzanie błędów pozytywnych
                 //zrobić sprawdzanie czy graf jest spójny
                 //zrobić sprawdzanie liści
+            }
+
+            bool connectivityCheck()
+            {
+                int maxEdges = 1000;
+                Node maxNode = null;
+                foreach (var tmp in nodes)
+                {
+                    tmp.buildVirtualEdges();
+                    int val = tmp.inCount;
+                    if (val < maxEdges)
+                    {
+                        maxEdges = val;
+                        maxNode = tmp;
+                    }
+                }
+                var n0 = maxNode;
+                Dictionary<string, Node> dic = new Dictionary<string, Node>();
+                dic.Add(maxNode.getKey(), maxNode);
+                List<Node> newNodes = new List<Node>();
+                newNodes.Add(maxNode);
+                for (; ; )
+                {
+                    List<Node> newNodesDup = new List<Node>(newNodes);
+                    newNodes.Clear();
+                    int count = newNodesDup.Count;
+                    for (int i = 0; i < count; ++i)
+                    {
+                        var ele = newNodesDup.First();
+                        newNodesDup.RemoveAt(0);
+
+                        foreach (var n2 in ele.virtualEdgesList)
+                        {
+                            if (!dic.ContainsKey(n2.value.getKey()))
+                            {
+                                newNodes.Add(n2.value);
+                                dic.Add(n2.value.getKey(), n2.value);
+                            }
+                        }
+                    }
+                    if (newNodes.Count == 0) break;
+                }
+
+                int dc = dic.Count;
+                int nc = nodes.Count;
+                return (dc == nc);
             }
 
             public List<string> getEulerPath()
@@ -334,6 +512,7 @@ namespace sekwencjonowanie_DNA
                     return output;
                 } else
                 {
+                    Console.WriteLine("Wykryto problemy z danymi.");
                     //zabezpieczenie przed dziwnymi grafami
                     //nie ma jeszcze sprawdzania spójności grafu !!!!!!!!!!!!!!!
                     return null;
