@@ -355,7 +355,7 @@ namespace sekwencjonowanie_DNA
                                 //dodanie krawedzi
                                 //if (l.outCount == 0 && ne.inCount == 0) l.addEdge(c0, ne);  //to nie uwzględnia wszystkich przypadków
                                 l.addEdge(c0, ne);
-                                if (connectivityCheck() == false) l.removeEdge(c0, ne);
+                                //if (connectivityCheck() == false) l.removeEdge(c0, ne);
                                 break;
                             }
                         }
