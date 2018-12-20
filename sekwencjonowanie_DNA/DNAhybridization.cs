@@ -137,6 +137,7 @@ namespace sekwencjonowanie_DNA
             public Graph g;
             public string key = "";
             List<CharNode> edgesList = new List<CharNode>();
+            List<Node> parentsList = null;
             public List<CharNode> virtualEdgesList = null;
             public int inCount; //liczba krawędzi przychodzących
             public int outCount;    //liczba krawędzi wychodzących
@@ -144,6 +145,23 @@ namespace sekwencjonowanie_DNA
             public int getVirtualEdgesCount()
             {
                 return virtualEdgesList.Count;
+            }
+
+            public List<Node> getParents()
+            {
+                if (parentsList == null)
+                {
+                    parentsList = new List<Node>();
+                    foreach (var n in g.nodes)
+                    {
+                        if (n == this) continue;
+                        foreach (var e in n.virtualEdgesList)
+                        {
+                            if (n.getKey().Substring(1) + e.key == key) parentsList.Add(n);
+                        }
+                    }
+                }
+                return parentsList;
             }
 
             public string getKey()
@@ -169,6 +187,15 @@ namespace sekwencjonowanie_DNA
                 edgesList.Add(new CharNode(keyChar, newNode));
                 outCount++;
                 newNode.inCount++;
+            }
+
+            //usuwa krawędź/ścieżke
+            public void removeEdge(char keyChar, Node newNode)
+            {
+                if (edgesList == null) return;
+                edgesList.Remove(new CharNode(keyChar, newNode));
+                outCount--;
+                newNode.inCount--;
             }
 
             //potrzebne do niszczenia za sobą ścieżek przy przechodzeniu przez graf
@@ -243,7 +270,7 @@ namespace sekwencjonowanie_DNA
             public bool changeLock;
             public bool noMoreSolutions = false;
 
-            List<Node> nodes = new List<Node>();
+            public List<Node> nodes = new List<Node>();
             string letters = "";    //zawiera litery "ACGT"
             public Graph(string letters, HashSet<string> stringNodes, HashSet<string> input, List<string> dup)
             {
@@ -301,10 +328,11 @@ namespace sekwencjonowanie_DNA
                 }
                 //sprawdzenie spójności grafu
                 bool connect = connectivityCheck();
+                if (!connect) positiveErrorSolve();
+                connect = connectivityCheck();
                 //naprawa spójności pierwszego stopnia
                 if (!connect)
                 {
-                    Console.WriteLine("Graf jest prawdopodobnie niespójny.");
                     Console.WriteLine("Próba odtworzenia brakującego połączenia grafu.");
                     //szukaj lisci
                     List<Node> leafs = new List<Node>();
@@ -325,7 +353,9 @@ namespace sekwencjonowanie_DNA
                             if (ne != null)
                             {
                                 //dodanie krawedzi
+                                //if (l.outCount == 0 && ne.inCount == 0) l.addEdge(c0, ne);  //to nie uwzględnia wszystkich przypadków
                                 l.addEdge(c0, ne);
+                                if (connectivityCheck() == false) l.removeEdge(c0, ne);
                                 break;
                             }
                         }
@@ -421,10 +451,6 @@ namespace sekwencjonowanie_DNA
                     }
                 }
                 else return;
-                //zrobić sprawdzanie błędów negatywnych, sprawdzanie rekurencyjne i przewidywanie nowych ścieżek
-                //zrobić sprawdzanie błędów pozytywnych
-                //zrobić sprawdzanie czy graf jest spójny
-                //zrobić sprawdzanie liści
             }
 
             bool connectivityCheck()
@@ -464,13 +490,59 @@ namespace sekwencjonowanie_DNA
                                 dic.Add(n2.value.getKey(), n2.value);
                             }
                         }
+                        foreach (var np in ele.getParents())
+                        {
+                            if (!dic.ContainsKey(np.getKey()))
+                            {
+                                newNodes.Add(np);
+                                dic.Add(np.getKey(), np);
+                            }
+                        }
                     }
                     if (newNodes.Count == 0) break;
                 }
-
                 int dc = dic.Count;
                 int nc = nodes.Count;
-                return (dc == nc);
+                bool sp = (dc == nc);
+                return sp;
+            }
+
+            void positiveErrorSolve()
+            {
+                Console.WriteLine("Graf jest niespójny.");
+                int positiveErrorCounter = 0;
+                List<Node> toDelete = new List<Node>();
+                foreach (var node in nodes)
+                {
+                    //policz węzły nie związane z grafem
+                    if (node.inCount == 0 && node.outCount == 1)
+                    {
+                        var node2 = node.virtualEdgesList.First();
+                        if (node2.value.inCount == 1 && node2.value.outCount == 0)
+                        {
+                            positiveErrorCounter++;
+                            toDelete.Add(node);
+                            positiveErrorCounter++;
+                            toDelete.Add(node2.value);
+                            Console.WriteLine("Wykryto błąd pozytywny.");
+                        }
+                    }
+                    if (node.inCount == 1 && node.outCount == 1)
+                    {
+                        var node2 = node.virtualEdgesList.First();
+                        if (node2.value.inCount == 1 && node2.value.outCount == 1 && node.getKey() == node2.value.getKey())
+                        {
+                            positiveErrorCounter++;
+                            toDelete.Add(node);
+                            Console.WriteLine("Wykryto błąd pozytywny.");
+                        }
+                    }
+                }
+                foreach (var node in toDelete)
+                {
+                    nodes.Remove(node);
+                }
+                
             }
 
             public List<string> getEulerPath()
@@ -513,6 +585,31 @@ namespace sekwencjonowanie_DNA
                 } else
                 {
                     Console.WriteLine("Wykryto problemy z danymi.");
+                    /*if (!positiveError) {
+                        Console.WriteLine("Możliwy błąd pozytywny.");
+                        //obsługa błędu pozytywnego
+
+                        List<Node> suspect = new List<Node>();
+                        foreach (var n in nodes)
+                        {
+                            if (n.outCount - n.inCount > 0 && (n.outCount == 0 || n.inCount == 0))
+                            {
+                                suspect.Add(n);
+                            }
+                            if (n.outCount - n.inCount < 0 && (n.outCount == 0 || n.inCount == 0))
+                            {
+                                suspect.Add(n);
+                            }
+                        }
+
+                        //prymitywne rozwiązanie, usunięcie wszystkich podejrzanych węzłów
+                        foreach (var sus in suspect)
+                        {
+                            nodes.Remove(sus);
+                        }
+
+                        return getEulerPath(true); 
+                    }*/
                     //zabezpieczenie przed dziwnymi grafami
                     //nie ma jeszcze sprawdzania spójności grafu !!!!!!!!!!!!!!!
                     return null;
